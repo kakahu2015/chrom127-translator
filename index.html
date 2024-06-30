@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Global Language Translator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+            background-color: #f0f0f0;
+        }
+        #app {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+            width: 100%;
+        }
+        textarea {
+            width: 100%;
+            height: 150px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+            resize: vertical;
+        }
+        select, button {
+            padding: 10px;
+            font-size: 16px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        select {
+            max-width: 200px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        #result {
+            background-color: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            min-height: 150px;
+        }
+        #status {
+            color: #666;
+            font-style: italic;
+        }
+        .language-selectors {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .error-message {
+            color: #ff0000;
+            font-weight: bold;
+            text-align: center;
+            padding: 20px;
+            background-color: #ffe6e6;
+            border-radius: 4px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <h1>Global Language Translator</h1>
+        <textarea id="input" placeholder="Enter text to translate"></textarea>
+        <div class="language-selectors">
+            <select id="fromLang"></select>
+            <span>→</span>
+            <select id="toLang"></select>
+        </div>
+        <button id="translateBtn" onclick="performTranslation()">Translate</button>
+        <div id="status"></div>
+        <div id="result"></div>
+    </div>
+
+    <script>
+        let aiSession;
+        const translateBtn = document.getElementById('translateBtn');
+        const statusDiv = document.getElementById('status');
+        const resultDiv = document.getElementById('result');
+        const fromLangSelect = document.getElementById('fromLang');
+        const toLangSelect = document.getElementById('toLang');
+
+        const languages = {
+            'zh-CN': '简体中文 (Simplified Chinese)',
+            'zh-TW': '繁體中文 (Traditional Chinese)',
+            'en': 'English',
+            'es': 'Español (Spanish)',
+            'hi': 'हिन्दी (Hindi)',
+            'ar': 'العربية (Arabic)',
+            'pt': 'Português (Portuguese)',
+            'bn': 'বাংলা (Bengali)',
+            'ru': 'Русский (Russian)',
+            'ja': '日本語 (Japanese)',
+            'de': 'Deutsch (German)',
+            'fr': 'Français (French)',
+            'ko': '한국어 (Korean)',
+            'it': 'Italiano (Italian)',
+            'tr': 'Türkçe (Turkish)',
+            'vi': 'Tiếng Việt (Vietnamese)',
+            'th': 'ไทย (Thai)',
+            'nl': 'Nederlands (Dutch)',
+            'pl': 'Polski (Polish)',
+            'sv': 'Svenska (Swedish)'
+        };
+
+        function populateLanguageSelects() {
+            for (const [code, name] of Object.entries(languages)) {
+                const option1 = new Option(name, code);
+                const option2 = new Option(name, code);
+                fromLangSelect.add(option1);
+                toLangSelect.add(option2);
+            }
+            fromLangSelect.value = 'en';
+            toLangSelect.value = 'zh-CN';
+        }
+
+        function showBrowserNotSupportedError() {
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error-message';
+            errorDiv.innerHTML = 'Your browser does not support this feature. Please refer to <a href="https://abc.com" target="_blank">https://abc.com</a> for more information.';
+            document.body.insertBefore(errorDiv, document.body.firstChild);
+            translateBtn.disabled = true;
+        }
+
+        async function initAI() {
+            statusDiv.textContent = 'Initializing AI...';
+            try {
+                if (typeof window.ai === 'undefined' || typeof window.ai.canCreateGenericSession === 'undefined') {
+                    throw new Error('Browser not supported');
+                }
+                const canCreate = await window.ai.canCreateGenericSession();
+                if (canCreate !== "no") {
+                    aiSession = await window.ai.createTextSession();
+                    statusDiv.textContent = 'AI initialized successfully.';
+                } else {
+                    throw new Error("Can't create AI session");
+                }
+            } catch (error) {
+                if (error.message === 'Browser not supported') {
+                    showBrowserNotSupportedError();
+                } else {
+                    statusDiv.textContent = `Error: ${error.message}`;
+                    translateBtn.disabled = true;
+                }
+            }
+        }
+
+        async function performTranslation() {
+            const input = document.getElementById('input').value.trim();
+            const fromLang = fromLangSelect.value;
+            const toLang = toLangSelect.value;
+
+            if (input === '') {
+                statusDiv.textContent = 'Please enter text to translate.';
+                return;
+            }
+
+            if (fromLang === toLang) {
+                statusDiv.textContent = 'Please select different languages for translation.';
+                return;
+            }
+
+            translateBtn.disabled = true;
+            statusDiv.textContent = 'Translating...';
+            resultDiv.textContent = '';
+
+            if (!aiSession) {
+                await initAI();
+            }
+
+            if (aiSession) {
+                try {
+                    let prompt;
+                    if ((fromLang === 'zh-CN' && toLang === 'zh-TW') || (fromLang === 'zh-TW' && toLang === 'zh-CN')) {
+                        prompt = `Convert the following text from ${languages[fromLang]} to ${languages[toLang]}. 
+                        Do not translate to any other language, only convert between Simplified and Traditional Chinese characters:
+
+                        ${input}
+
+                        Converted text:`;
+                    } else {
+                        prompt = `Translate the following text from ${languages[fromLang]} to ${languages[toLang]}:
+
+                        ${input}
+
+                        Translation:`;
+                    }
+                    const response = await aiSession.prompt(prompt);
+                    resultDiv.textContent = response.trim();
+                    statusDiv.textContent = 'Translation completed.';
+                } catch (error) {
+                    statusDiv.textContent = `Error: ${error.message}`;
+                    console.error('AI response error:', error);
+                }
+            }
+
+            translateBtn.disabled = false;
+        }
+
+        // Initialize language selects and AI session when the page loads
+        populateLanguageSelects();
+        initAI();
+    </script>
+</body>
+</html>
